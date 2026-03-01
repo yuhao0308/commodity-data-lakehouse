@@ -1,0 +1,10 @@
+name: raw_validation
+config_version: 1.0
+class_name: Checkpoint
+run_name_template: "%Y%m%d-%H%M%S-raw-validation"
+validations:
+  - batch_request:
+      datasource_name: warehouse_postgres
+      data_connector_name: default_inferred_data_connector_name
+      data_asset_name: raw_commodities
+    expectation_suite_name: commodities_raw

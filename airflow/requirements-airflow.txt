@@ -1,0 +1,11 @@
+# Python dependencies baked into the Airflow Docker image
+# Keep this minimal — only what DAGs and operators need at runtime
+
+yfinance>=0.2.40
+pandas>=2.2.0
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+great-expectations>=0.18.0
+openlineage-airflow>=1.21.0
+python-dotenv>=1.0.0
+requests>=2.31.0

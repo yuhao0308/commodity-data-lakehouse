@@ -1,0 +1,24 @@
+[project]
+name = "commodity-data-lakehouse"
+version = "0.1.0"
+description = "Commodity futures ETL lakehouse scaffold"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["airflow", "scripts"]
+exclude = ["dbt", "great_expectations", "lineage"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["airflow", "scripts"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

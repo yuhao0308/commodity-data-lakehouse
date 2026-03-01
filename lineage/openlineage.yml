@@ -1,0 +1,18 @@
+# OpenLineage transport configuration
+# Referenced by AIRFLOW__OPENLINEAGE__TRANSPORT or openlineage.yml discovery
+#
+# Docs: https://openlineage.io/docs/client/python/configuration
+
+transport:
+  type: http
+  url: "${OPENLINEAGE_URL:-http://localhost:5000}"
+  endpoint: /api/v1/lineage
+  # Optional auth (uncomment for production):
+  # auth:
+  #   type: api_key
+  #   api_key: "${OPENLINEAGE_API_KEY}"
+
+facets:
+  disabled:
+    # Disable noisy facets if needed:
+    # - spark.logicalPlan

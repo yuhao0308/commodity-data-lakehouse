@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/standalone_admin_password.txt
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/profiles.yml
+
+# Great Expectations
+great_expectations/uncommitted/
+
+# SQLFluff
+.sqlfluffcache/
+
+# Docker / local service data
+postgres_data/
+marquez_data/
+*.pid
+
+# IDE
+.vscode/
+.idea/

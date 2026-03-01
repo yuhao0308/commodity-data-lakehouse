@@ -1,0 +1,40 @@
+# Copy this file to ~/.dbt/profiles.yml or to dbt/profiles.yml (gitignored)
+# and fill in your credentials.
+
+commodity_lakehouse:
+  target: dev
+
+  outputs:
+    # Local development — uses the Postgres container from docker-compose
+    dev:
+      type: postgres
+      host: "{{ env_var('WAREHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('WAREHOUSE_PORT', '5432') | int }}"
+      user: "{{ env_var('WAREHOUSE_USER', 'loader') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD', 'change_me') }}"
+      dbname: "{{ env_var('WAREHOUSE_DB', 'commodity_lakehouse') }}"
+      schema: public
+      threads: 4
+
+    # CI — used by GitHub Actions with the Postgres service container
+    ci:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: test
+      password: test
+      dbname: commodity_lakehouse_test
+      schema: public
+      threads: 2
+
+    # Snowflake — uncomment and configure when targeting Snowflake
+    # prod_snowflake:
+    #   type: snowflake
+    #   account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+    #   user: "{{ env_var('SNOWFLAKE_USER') }}"
+    #   password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+    #   role: "{{ env_var('SNOWFLAKE_ROLE', 'TRANSFORMER') }}"
+    #   database: "{{ env_var('SNOWFLAKE_DATABASE', 'COMMODITY_LAKEHOUSE') }}"
+    #   warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'TRANSFORMING') }}"
+    #   schema: public
+    #   threads: 4

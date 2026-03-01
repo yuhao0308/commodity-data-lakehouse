@@ -1,0 +1,133 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gamma-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-loader}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-loader}
+      POSTGRES_DB: ${POSTGRES_DB:-commodity_lakehouse}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-loader} -d ${POSTGRES_DB:-commodity_lakehouse}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    build:
+      context: ./airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: &airflow-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-loader}:${POSTGRES_PASSWORD:-loader}@postgres:5432/${POSTGRES_DB:-commodity_lakehouse}
+      AIRFLOW__OPENLINEAGE__TRANSPORT: '{"type":"http","url":"${OPENLINEAGE_URL:-http://marquez:5000}","endpoint":"/api/v1/lineage"}'
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY:-change_me}
+      COMMODITY_SYMBOLS: ${COMMODITY_SYMBOLS:-CL=F,GC=F,ZW=F}
+      WAREHOUSE_TYPE: ${WAREHOUSE_TYPE:-postgres}
+      WAREHOUSE_HOST: ${WAREHOUSE_HOST:-postgres}
+      WAREHOUSE_PORT: ${WAREHOUSE_PORT:-5432}
+      WAREHOUSE_DB: ${WAREHOUSE_DB:-commodity_lakehouse}
+      WAREHOUSE_USER: ${WAREHOUSE_USER:-loader}
+      WAREHOUSE_PASSWORD: ${WAREHOUSE_PASSWORD:-loader}
+      WAREHOUSE_SQLALCHEMY_URL: ${WAREHOUSE_SQLALCHEMY_URL:-postgresql+psycopg2://loader:loader@postgres:5432/commodity_lakehouse}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      OPENLINEAGE_URL: ${OPENLINEAGE_URL:-http://marquez:5000}
+      GREAT_EXPECTATIONS_HOME: /opt/airflow/great_expectations
+    user: "${AIRFLOW_UID:-50000}:0"
+    volumes: &airflow-volumes
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/include:/opt/airflow/include
+      - ./great_expectations:/opt/airflow/great_expectations
+    command: >
+      bash -c "airflow db migrate &&
+      airflow users create
+      --username airflow
+      --password airflow
+      --firstname Airflow
+      --lastname Admin
+      --role Admin
+      --email admin@example.com || true"
+
+  airflow-webserver:
+    build:
+      context: ./airflow
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment: *airflow-env
+    user: "${AIRFLOW_UID:-50000}:0"
+    volumes: *airflow-volumes
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  airflow-scheduler:
+    build:
+      context: ./airflow
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    environment: *airflow-env
+    user: "${AIRFLOW_UID:-50000}:0"
+    volumes: *airflow-volumes
+    command: scheduler
+    restart: unless-stopped
+
+  marquez-db:
+    image: postgres:16
+    container_name: gamma-marquez-db
+    environment:
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+      POSTGRES_DB: marquez
+    ports:
+      - "5433:5432"
+    volumes:
+      - marquez_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marquez -d marquez"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  marquez:
+    image: marquezproject/marquez:0.50.0
+    container_name: gamma-marquez
+    depends_on:
+      marquez-db:
+        condition: service_healthy
+    environment:
+      MARQUEZ_PORT: 5000
+      MARQUEZ_ADMIN_PORT: 5001
+      POSTGRES_URL: jdbc:postgresql://marquez-db:5432/marquez
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    restart: unless-stopped
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.50.0
+    container_name: gamma-marquez-web
+    depends_on:
+      - marquez
+    environment:
+      MARQUEZ_HOST: marquez
+      MARQUEZ_PORT: 5000
+      WEB_PORT: 3000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  marquez_db_data:

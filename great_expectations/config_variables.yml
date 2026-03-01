@@ -1,0 +1,2 @@
+# Great Expectations variables.
+# Uses WAREHOUSE_SQLALCHEMY_URL from environment for datasource connection.
