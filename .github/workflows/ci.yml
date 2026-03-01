@@ -1,0 +1,80 @@
+name: PR Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: commodity_lakehouse_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d commodity_lakehouse_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      WAREHOUSE_TYPE: postgres
+      WAREHOUSE_HOST: localhost
+      WAREHOUSE_PORT: 5432
+      WAREHOUSE_DB: commodity_lakehouse_test
+      WAREHOUSE_USER: test
+      WAREHOUSE_PASSWORD: test
+      WAREHOUSE_SQLALCHEMY_URL: postgresql+psycopg2://test:test@localhost:5432/commodity_lakehouse_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint Python
+        run: ruff check . && ruff format --check .
+
+      - name: Lint SQL
+        run: sqlfluff lint dbt/models/ --ignore parsing
+
+      - name: Seed sample data
+        run: python scripts/seed_sample_data.py
+
+      - name: Run GX validation
+        run: |
+          cd great_expectations
+          python -c "
+          import great_expectations as gx
+          context = gx.get_context(context_root_dir='.')
+          result = context.run_checkpoint(checkpoint_name='raw_validation')
+          assert result.success, 'GX validation failed'
+          "
+
+      - name: dbt run + test
+        run: |
+          cd dbt
+          dbt deps
+          dbt run --target ci
+          dbt test --target ci
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            great_expectations/uncommitted/data_docs/
+            dbt/target/

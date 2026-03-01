@@ -45,6 +45,7 @@ services:
       - ./airflow/plugins:/opt/airflow/plugins
       - ./airflow/include:/opt/airflow/include
       - ./great_expectations:/opt/airflow/great_expectations
+      - ./dbt:/opt/airflow/dbt
     command: >
       bash -c "airflow db migrate &&
       airflow users create

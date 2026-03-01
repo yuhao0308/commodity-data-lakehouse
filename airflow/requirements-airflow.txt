@@ -9,3 +9,7 @@ great-expectations>=0.18.0
 openlineage-airflow>=1.21.0
 python-dotenv>=1.0.0
 requests>=2.31.0
+
+# dbt (run inside Airflow container via trigger_dbt task)
+dbt-core>=1.8.0
+dbt-postgres>=1.8.0

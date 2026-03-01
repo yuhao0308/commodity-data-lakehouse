@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: stg_commodities
+    description: Cleaned staging layer for published commodity futures data
+    columns:
+      - name: symbol
+        description: yfinance ticker symbol
+        tests:
+          - not_null
+      - name: trade_date
+        description: Trading day
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price
+        tests:
+          - not_null
+      - name: open_price
+        description: Opening price
+      - name: high_price
+        description: Intraday high
+      - name: low_price
+        description: Intraday low
+      - name: volume
+        description: Trading volume
+      - name: data_source
+        description: Data source identifier
+        tests:
+          - not_null
+      - name: published_at
+        description: Promotion timestamp
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "symbol || '-' || trade_date"

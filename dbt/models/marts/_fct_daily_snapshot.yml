@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fct_daily_snapshot
+    description: >
+      Daily commodity snapshot combining price data with volatility metrics
+      and Bollinger Bands. This is the primary analytics-ready table.
+    columns:
+      - name: symbol
+        description: yfinance ticker symbol
+        tests:
+          - not_null
+      - name: trade_date
+        description: Trading day
+        tests:
+          - not_null
+      - name: close_price
+        description: Closing price
+        tests:
+          - not_null
+      - name: daily_range
+        description: Intraday price range (high - low)
+      - name: daily_return_pct
+        description: Daily return as percentage ((close - open) / open * 100)
+      - name: sma_20
+        description: 20-day simple moving average (null if < 20 days of history)
+      - name: volatility
+        description: 20-day rolling standard deviation (null if < 20 days)
+      - name: upper_band
+        description: Upper Bollinger Band
+      - name: lower_band
+        description: Lower Bollinger Band
+      - name: percent_b
+        description: "%B indicator"
+      - name: data_source
+        description: Data source identifier
+      - name: published_at
+        description: Promotion timestamp
+    tests:
+      - unique:
+          column_name: "symbol || '-' || trade_date"

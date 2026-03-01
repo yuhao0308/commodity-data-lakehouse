@@ -95,14 +95,35 @@ def commodity_etl_dag():
 
     @task(task_id="trigger_dbt")
     def trigger_dbt(load_summary: dict[str, Any]) -> dict[str, str]:
-        LOGGER.info(
-            "Skipping dbt trigger in Step 2; load summary: start=%s end=%s symbols=%s rows=%s",
-            load_summary.get("start_date"),
-            load_summary.get("end_date"),
-            load_summary.get("symbols"),
-            load_summary.get("published_rows"),
-        )
-        return {"status": "skipped", "reason": "dbt trigger deferred to a later step"}
+        import subprocess
+        import sys
+
+        published_rows = load_summary.get("published_rows", 0)
+        if published_rows == 0:
+            LOGGER.info("No rows published — skipping dbt run.")
+            return {"status": "skipped", "reason": "no rows to transform"}
+
+        dbt_project_dir = _resolve_dbt_project_dir()
+        LOGGER.info("Running dbt from %s", dbt_project_dir)
+
+        for cmd_name, cmd_args in [
+            ("dbt deps", ["deps"]),
+            ("dbt run", ["run", "--select", "stg_commodities+"]),
+            ("dbt test", ["test", "--select", "stg_commodities+"]),
+        ]:
+            result = subprocess.run(
+                [sys.executable, "-m", "dbt", *cmd_args, "--project-dir", str(dbt_project_dir)],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=str(dbt_project_dir),
+            )
+            if result.returncode != 0:
+                output = result.stderr.strip() or result.stdout.strip()
+                raise AirflowException(f"{cmd_name} failed: {output}")
+            LOGGER.info("%s succeeded.", cmd_name)
+
+        return {"status": "completed"}
 
     extracted_oil = extract_oil()
     extracted_gold = extract_gold()
@@ -164,6 +185,14 @@ def _resolve_symbol_map() -> dict[str, str]:
         if index < len(configured_symbols):
             symbol_map[key] = configured_symbols[index]
     return symbol_map
+
+
+def _resolve_dbt_project_dir() -> Path:
+    """Resolve the dbt project directory."""
+    airflow_default = Path("/opt/airflow/dbt")
+    if airflow_default.exists():
+        return airflow_default
+    return CURRENT_DIR.parents[1] / "dbt"
 
 
 commodity_etl = commodity_etl_dag()
