@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
+import subprocess
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -95,35 +98,19 @@ def commodity_etl_dag():
 
     @task(task_id="trigger_dbt")
     def trigger_dbt(load_summary: dict[str, Any]) -> dict[str, str]:
-        import subprocess
-        import sys
-
         published_rows = load_summary.get("published_rows", 0)
         if published_rows == 0:
             LOGGER.info("No rows published — skipping dbt run.")
             return {"status": "skipped", "reason": "no rows to transform"}
 
-        dbt_project_dir = _resolve_dbt_project_dir()
-        LOGGER.info("Running dbt from %s", dbt_project_dir)
-
-        for cmd_name, cmd_args in [
-            ("dbt deps", ["deps"]),
-            ("dbt run", ["run", "--select", "stg_commodities+"]),
-            ("dbt test", ["test", "--select", "stg_commodities+"]),
-        ]:
-            result = subprocess.run(
-                [sys.executable, "-m", "dbt", *cmd_args, "--project-dir", str(dbt_project_dir)],
-                check=False,
-                capture_output=True,
-                text=True,
-                cwd=str(dbt_project_dir),
-            )
-            if result.returncode != 0:
-                output = result.stderr.strip() or result.stdout.strip()
-                raise AirflowException(f"{cmd_name} failed: {output}")
-            LOGGER.info("%s succeeded.", cmd_name)
-
-        return {"status": "completed"}
+        run_result = _run_dbt_models()
+        LOGGER.info(
+            "dbt run completed. command=%s target=%s project_dir=%s",
+            run_result["command"],
+            run_result["target"],
+            run_result["project_dir"],
+        )
+        return {"status": "completed", **run_result}
 
     extracted_oil = extract_oil()
     extracted_gold = extract_gold()
@@ -189,10 +176,93 @@ def _resolve_symbol_map() -> dict[str, str]:
 
 def _resolve_dbt_project_dir() -> Path:
     """Resolve the dbt project directory."""
+    configured_dir = os.getenv("DBT_PROJECT_DIR")
+    if configured_dir:
+        configured_path = Path(configured_dir)
+        if configured_path.exists():
+            return configured_path
+
     airflow_default = Path("/opt/airflow/dbt")
     if airflow_default.exists():
         return airflow_default
-    return CURRENT_DIR.parents[1] / "dbt"
+
+    local_dir = CURRENT_DIR.parents[1] / "dbt"
+    if local_dir.exists():
+        return local_dir
+
+    raise AirflowException("Could not find dbt project directory. Set DBT_PROJECT_DIR.")
+
+
+def _run_dbt_models() -> dict[str, str]:
+    dbt_project_dir = _resolve_dbt_project_dir()
+    dbt_target = os.getenv("DBT_TARGET", "dev")
+    dbt_select = os.getenv("DBT_SELECT", "stg_commodities+")
+    profile_name = os.getenv("DBT_PROFILE", "commodity_lakehouse")
+
+    with tempfile.TemporaryDirectory(prefix="dbt_profiles_") as profiles_dir:
+        profiles_path = Path(profiles_dir) / "profiles.yml"
+        profiles_path.write_text(
+            _build_runtime_dbt_profile(profile_name=profile_name, target_name=dbt_target),
+            encoding="utf-8",
+        )
+
+        command = [
+            sys.executable,
+            "-m",
+            "dbt",
+            "run",
+            "--select",
+            dbt_select,
+            "--target",
+            dbt_target,
+            "--project-dir",
+            str(dbt_project_dir),
+            "--profiles-dir",
+            profiles_dir,
+            "--profile",
+            profile_name,
+        ]
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=str(dbt_project_dir),
+        )
+        if result.returncode != 0:
+            output = (result.stderr or result.stdout).strip()
+            raise AirflowException(f"dbt run failed for selection '{dbt_select}': {output}")
+
+    return {
+        "command": " ".join(command),
+        "target": dbt_target,
+        "project_dir": str(dbt_project_dir),
+    }
+
+
+def _build_runtime_dbt_profile(*, profile_name: str, target_name: str) -> str:
+    host = os.getenv("WAREHOUSE_HOST", "postgres")
+    port = int(os.getenv("WAREHOUSE_PORT", "5432"))
+    user = os.getenv("WAREHOUSE_USER", "loader")
+    password = os.getenv("WAREHOUSE_PASSWORD", "loader")
+    db_name = os.getenv("WAREHOUSE_DB", "commodity_lakehouse")
+    schema = os.getenv("DBT_SCHEMA", "public")
+
+    # json.dumps keeps values safely quoted for YAML.
+    return (
+        f"{profile_name}:\n"
+        f"  target: {target_name}\n"
+        "  outputs:\n"
+        f"    {target_name}:\n"
+        "      type: postgres\n"
+        f"      host: {json.dumps(host)}\n"
+        f"      port: {port}\n"
+        f"      user: {json.dumps(user)}\n"
+        f"      password: {json.dumps(password)}\n"
+        f"      dbname: {json.dumps(db_name)}\n"
+        f"      schema: {json.dumps(schema)}\n"
+        "      threads: 4\n"
+    )
 
 
 commodity_etl = commodity_etl_dag()

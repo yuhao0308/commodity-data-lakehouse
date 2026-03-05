@@ -95,12 +95,16 @@ def _build_scoped_query(
     Symbols come from our own COMMODITY_SYMBOLS env var / DAG params (not user input),
     so inline formatting is acceptable here.
     """
-    symbols_sql = ", ".join(f"''{s}''" for s in symbols)
+    symbols_sql = ", ".join(f"'{_escape_sql_literal(s)}'" for s in symbols)
     return (
         f"select * from raw_commodities "
-        f"where trade_date between ''{start_date.isoformat()}'' and ''{end_date.isoformat()}'' "
+        f"where trade_date between '{start_date.isoformat()}' and '{end_date.isoformat()}' "
         f"and symbol in ({symbols_sql})"
     )
+
+
+def _escape_sql_literal(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def _project_root() -> Path:

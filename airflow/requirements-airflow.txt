@@ -13,3 +13,6 @@ requests>=2.31.0
 # dbt (run inside Airflow container via trigger_dbt task)
 dbt-core>=1.8.0
 dbt-postgres>=1.8.0
+
+# Testing utilities for in-container e2e assertions
+pytest>=8.0.0

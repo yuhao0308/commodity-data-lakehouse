@@ -39,6 +39,12 @@ services:
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
       OPENLINEAGE_URL: ${OPENLINEAGE_URL:-http://marquez:5000}
       GREAT_EXPECTATIONS_HOME: /opt/airflow/great_expectations
+      DBT_TARGET: ${DBT_TARGET:-dev}
+      DBT_SELECT: ${DBT_SELECT:-stg_commodities+}
+      DBT_SCHEMA: ${DBT_SCHEMA:-public}
+      DBT_PROFILE: ${DBT_PROFILE:-commodity_lakehouse}
+      MARQUEZ_URL: ${MARQUEZ_URL:-http://marquez:5000}
+      AIRFLOW_BASE_URL: ${AIRFLOW_BASE_URL:-http://localhost:8080}
     user: "${AIRFLOW_UID:-50000}:0"
     volumes: &airflow-volumes
       - ./airflow/dags:/opt/airflow/dags
@@ -46,6 +52,8 @@ services:
       - ./airflow/include:/opt/airflow/include
       - ./great_expectations:/opt/airflow/great_expectations
       - ./dbt:/opt/airflow/dbt
+      - ./scripts:/opt/airflow/scripts
+      - ./tests:/opt/airflow/tests
     command: >
       bash -c "airflow db migrate &&
       airflow users create
